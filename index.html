@@ -11,20 +11,60 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f0f2f5;
+            /* Ensure full height on mobile devices */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to top, allow content to push down */
+            padding: 1rem; /* p-4, slightly less padding for mobile */
         }
         .container-wrapper {
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Default to column for mobile */
             gap: 1.5rem; /* gap-6 */
-            padding: 1.5rem; /* p-6 */
+            padding: 0; /* Remove padding here as body already has it */
             max-width: 1200px;
+            width: 100%; /* Ensure it takes full width */
             margin: auto;
         }
         @media (min-width: 1024px) { /* lg breakpoint */
             .container-wrapper {
-                flex-direction: row;
+                flex-direction: row; /* Switch to row on larger screens */
             }
         }
+        /* Header / View Toggles styling */
+        .header-toggles {
+            width: 100%;
+            max-width: 4xl;
+            background-color: #ffffff;
+            padding: 1rem; /* p-4 */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
+            margin-bottom: 1.5rem; /* mb-6 */
+            display: flex;
+            justify-content: center;
+            gap: 1rem; /* gap-4 */
+        }
+        /* Main sections styling */
+        #driverApp, #dashboard {
+            width: 100%; /* Take full width on mobile */
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
+            padding: 1.5rem; /* p-6 */
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem; /* gap-6 */
+            transform: translateY(0); /* Ensure no initial transform */
+            transition: transform 0.3s ease-in-out;
+        }
+        @media (min-width: 1024px) {
+            #driverApp, #dashboard {
+                width: 50%; /* lg:w-1/2 */
+            }
+        }
+
         /* Custom scrollbar for better aesthetics */
         .overflow-y-auto::-webkit-scrollbar {
             width: 8px;
@@ -40,14 +80,6 @@
         .overflow-y-auto::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-        /* Ensure images are responsive */
-        img {
-            max-width: 100%;
-            height: auto;
-            display: block; /* Remove extra space below image */
-            object-fit: cover; /* Ensure image covers the area without distortion */
-            object-position: center; /* Center the image within the area */
-        }
         canvas {
             background-color: #f8f8f8; /* Light background for the map */
             border-radius: 0.5rem; /* rounded-lg */
@@ -55,12 +87,16 @@
             width: 100%;
             height: 100%;
         }
+        /* Ensure tables are responsive */
+        .overflow-x-auto {
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
 
     <!-- Header / View Toggles -->
-    <div class="w-full max-w-4xl bg-white p-4 rounded-xl shadow-lg mb-6 flex justify-center gap-4">
+    <div class="header-toggles">
         <button id="driverAppBtn" class="px-6 py-3 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md">
             Ứng dụng Tài xế
         </button>
@@ -73,7 +109,7 @@
     <div class="container-wrapper">
 
         <!-- Driver App Section -->
-        <div id="driverApp" class="w-full lg:w-1/2 bg-white rounded-xl shadow-lg p-6 flex flex-col gap-6 transform transition-transform duration-300 ease-in-out">
+        <div id="driverApp">
             <h2 class="text-2xl font-bold text-gray-800 text-center mb-4">Ứng dụng Tài xế</h2>
 
             <!-- Màn hình 1: Lộ trình hiện tại -->
@@ -191,7 +227,7 @@
         </div>
 
         <!-- Dashboard Section -->
-        <div id="dashboard" class="w-full lg:w-1/2 bg-white rounded-xl shadow-lg p-6 flex flex-col gap-6 transform transition-transform duration-300 ease-in-out hidden">
+        <div id="dashboard">
             <h2 class="text-2xl font-bold text-gray-800 text-center mb-4">Dashboard Trung tâm</h2>
 
             <!-- Màn hình 1: Tổng quan -->
@@ -492,24 +528,50 @@
             context.stroke();
         }
 
-        // Helper function to draw a simple car icon inside a pin
+        // Helper function to draw a more detailed car icon inside a pin
         function drawCarShape(context) {
-            const carWidth = 16;
-            const carHeight = 8;
-            const wheelRadius = 2;
+            const carWidth = 18; // Slightly larger
+            const carHeight = 10;
+            const wheelRadius = 2.5; // Slightly larger wheels
 
             context.fillStyle = '#333'; // Dark grey for car body
+            context.strokeStyle = '#000'; // Black outline
+            context.lineWidth = 1;
+
+            // Car body
             context.beginPath();
-            context.rect(-carWidth / 2, -carHeight / 2, carWidth, carHeight);
+            context.moveTo(-carWidth / 2, carHeight / 2);
+            context.lineTo(carWidth / 2, carHeight / 2);
+            context.lineTo(carWidth / 2, -carHeight / 2 + 2); // Back top
+            context.lineTo(carWidth / 2 - 4, -carHeight / 2 - 2); // Back windshield bottom
+            context.lineTo(-carWidth / 2 + 4, -carHeight / 2 - 2); // Front windshield bottom
+            context.lineTo(-carWidth / 2, -carHeight / 2 + 2); // Front top
+            context.closePath();
+            context.fill();
+            context.stroke();
+
+            // Windows
+            context.fillStyle = '#ADD8E6'; // Light blue for windows
+            context.beginPath();
+            // Front windshield
+            context.moveTo(-carWidth / 2 + 4, -carHeight / 2 - 1.5);
+            context.lineTo(carWidth / 2 - 4, -carHeight / 2 - 1.5);
+            context.lineTo(carWidth / 2 - 4, -carHeight / 2 + 1);
+            context.lineTo(-carWidth / 2 + 4, -carHeight / 2 + 1);
+            context.closePath();
             context.fill();
 
-            // Wheels
-            context.fillStyle = '#000';
+            // Side window (simplified)
             context.beginPath();
-            context.arc(-carWidth / 2 + wheelRadius, carHeight / 2, wheelRadius, 0, Math.PI * 2);
-            context.arc(carWidth / 2 - wheelRadius, carHeight / 2, wheelRadius, 0, Math.PI * 2);
-            context.arc(-carWidth / 2 + wheelRadius, -carHeight / 2, wheelRadius, 0, Math.PI * 2);
-            context.arc(carWidth / 2 - wheelRadius, -carHeight / 2, wheelRadius, 0, Math.PI * 2);
+            context.rect(-carWidth / 2 + 2, -carHeight / 2 + 2.5, carWidth - 4, carHeight - 5);
+            context.fill();
+
+
+            // Wheels
+            context.fillStyle = '#000'; // Black for wheels
+            context.beginPath();
+            context.arc(-carWidth / 2 + wheelRadius + 2, carHeight / 2, wheelRadius, 0, Math.PI * 2);
+            context.arc(carWidth / 2 - wheelRadius - 2, carHeight / 2, wheelRadius, 0, Math.PI * 2);
             context.fill();
         }
 
@@ -648,6 +710,7 @@
             });
 
             // --- Draw Driver's Location ---
+            // This part is conditional based on the 'showDriver' parameter
             if (showDriver) {
                 const driverX = driverLocation.x * scaleX;
                 const driverY = driverLocation.y * scaleY;
@@ -670,7 +733,7 @@
                 if (!driverCtx) {
                     driverCtx = driverMapCanvas.getContext('2d');
                 }
-                drawMap(driverMapCanvas, driverCtx, true);
+                drawMap(driverMapCanvas, driverCtx, true); // Show driver on driver map
             });
 
             dashboardBtn.addEventListener('click', () => {
@@ -684,7 +747,7 @@
                 if (!dashboardCtx) {
                     dashboardCtx = dashboardMapCanvas.getContext('2d');
                 }
-                drawMap(dashboardMapCanvas, dashboardCtx);
+                drawMap(dashboardMapCanvas, dashboardCtx, false); // DO NOT show driver on dashboard map
             });
         } else {
             console.error("Lỗi: Không tìm thấy một hoặc nhiều phần tử nút chuyển đổi hoặc các phần chính của ứng dụng.");
@@ -735,7 +798,7 @@
                     if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
                     drawMap(driverMapCanvas, driverCtx, true);
                     if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
-                    drawMap(dashboardMapCanvas, dashboardCtx);
+                    drawMap(dashboardMapCanvas, dashboardCtx, false); // Redraw dashboard without driver
                 }
             });
         } else {
@@ -891,16 +954,12 @@
             // Only redraw if the dashboard is currently visible
             if (!dashboardSection.classList.contains('hidden')) {
                 if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
-                drawMap(dashboardMapCanvas, dashboardCtx);
+                drawMap(dashboardMapCanvas, dashboardCtx, false); // Redraw dashboard without driver
             } else if (!driverAppSection.classList.contains('hidden')) {
                 if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-                drawMap(driverMapCanvas, driverCtx, true);
+                drawMap(driverMapCanvas, driverCtx, true); // Redraw driver map with driver
             }
         });
-
-    </script>
-</body>
-</html>
 
     </script>
 </body>
