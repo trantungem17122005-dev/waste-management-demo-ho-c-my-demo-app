@@ -374,7 +374,7 @@
         // Firebase SDK imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables provided by the Canvas environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -382,10 +382,15 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (e) {
+            console.error("Lỗi khởi tạo Firebase:", e);
+        }
+        
         let userId = null; // Will store the authenticated user ID
 
         // Authenticate user
@@ -428,8 +433,9 @@
 
         let currentRouteIndex = 0; // Keep track of the current active route
 
-        // Dummy data for driver's current location
-        const driverLocation = { x: 120, y: 120 }; // Initial driver location
+        // Global variables for driver's state
+        let driverCurrentPosition = { x: 0, y: 0, binId: null }; // Store x, y coordinates and the binId it's currently at
+        let driverCollectedPath = []; // Store array of {x, y, binId} coordinates for collected bins (solid line)
 
         // Get elements
         const driverAppBtn = document.getElementById('driverAppBtn');
@@ -610,8 +616,41 @@
             context.fill();
         }
 
-        // drawMap now accepts an optional array of activeBinIds to draw
-        function drawMap(canvas, context, showDriver = false, activeBinIds = null) {
+        // Calculates Manhattan distance (for grid-based movement)
+        function calculateManhattanDistance(point1, point2) {
+            const dx = Math.abs(point1.x - point2.x);
+            const dy = Math.abs(point1.y - point2.y);
+            return dx + dy;
+        }
+
+        // Function to draw a path that follows the grid (simulated roads)
+        function drawGridPath(context, pathPoints, scaleX, scaleY, strokeStyle, lineWidth, lineDash = []) {
+            if (pathPoints.length < 2) return;
+
+            context.strokeStyle = strokeStyle;
+            context.lineWidth = lineWidth;
+            context.setLineDash(lineDash);
+
+            context.beginPath();
+            context.moveTo(pathPoints[0].x * scaleX, pathPoints[0].y * scaleY);
+
+            for (let i = 1; i < pathPoints.length; i++) {
+                const prevPoint = pathPoints[i - 1];
+                const currPoint = pathPoints[i];
+
+                // Determine the intermediate point for grid-like movement
+                const intermediateX = currPoint.x;
+                const intermediateY = prevPoint.y;
+
+                context.lineTo(intermediateX * scaleX, intermediateY * scaleY);
+                context.lineTo(currPoint.x * scaleX, currPoint.y * scaleY);
+            }
+            context.stroke();
+            context.setLineDash([]); // Reset line dash
+        }
+
+        // drawMap now accepts an optional array of activeBinIds to draw, collected path, planned path, and current driver position
+        function drawMap(canvas, context, showDriver = false, activeBinIds = null, collectedPath = [], plannedPath = [], currentDriverPos = { x: 0, y: 0 }) {
             if (!canvas || !context) {
                 console.error("Lỗi: Canvas hoặc context không hợp lệ.");
                 return;
@@ -628,10 +667,11 @@
             const scaleX = canvas.width / originalMapWidth;
             const scaleY = canvas.height / originalMapHeight;
 
+            // --- Draw Map Background ---
             context.fillStyle = '#F0F0F0';
             context.fillRect(0, 0, canvas.width, canvas.height);
 
-            context.fillStyle = '#C8E6C9';
+            context.fillStyle = '#C8E6C9'; // Light green for parks
             context.beginPath();
             context.moveTo(50 * scaleX, 50 * scaleY);
             context.lineTo(200 * scaleX, 50 * scaleY);
@@ -644,7 +684,6 @@
             context.arc(450 * scaleX, 100 * scaleY, 80 * scaleX, 0, Math.PI * 2);
             context.fill();
 
-            context.fillStyle = '#A7D9ED';
             context.beginPath();
             context.arc(100 * scaleX, 300 * scaleY, 60 * scaleX, 0, Math.PI * 2);
             context.fill();
@@ -657,7 +696,7 @@
             context.closePath();
             context.fill();
 
-            context.strokeStyle = '#D3D3D3';
+            context.strokeStyle = '#D3D3D3'; // Light grey for roads
             context.lineWidth = 12;
 
             context.beginPath();
@@ -693,32 +732,18 @@
             context.stroke();
             context.setLineDash([]);
 
-            context.lineWidth = 3;
-            context.strokeStyle = '#007bff';
-            context.setLineDash([5, 5]);
+            // --- Draw Driver's Collected Path (solid blue line) ---
+            if (showDriver && collectedPath && collectedPath.length > 0) {
+                drawGridPath(context, collectedPath, scaleX, scaleY, '#0000FF', 4, []); // Solid blue
+            }
 
-            // Draw routes based on activeBinIds or all routes
-            const routesToDraw = activeBinIds ? [activeBinIds] : routesData;
+            // --- Draw Planned Route (dashed blue line) ---
+            if (showDriver && plannedPath && plannedPath.length > 0) {
+                drawGridPath(context, plannedPath, scaleX, scaleY, '#007bff', 3, [5, 5]); // Dashed light blue
+            }
 
-            routesToDraw.forEach(route => {
-                context.beginPath();
-                route.forEach((binId, index) => {
-                    const bin = binsData[binId];
-                    if (bin) {
-                        const x = bin.x * scaleX;
-                        const y = bin.y * scaleY;
-                        if (index === 0) {
-                            context.moveTo(x, y);
-                        } else {
-                            context.lineTo(x, y);
-                        }
-                    }
-                });
-                context.stroke();
-            });
-            context.setLineDash([]);
-
-            // Draw bins based on activeBinIds or all bins
+            // --- Draw Bins ---
+            // Determine which bins to draw: all bins for dashboard, active route bins for driver app
             const binsToDraw = activeBinIds ? activeBinIds.map(id => binsData[id]) : Object.values(binsData);
 
             binsToDraw.forEach(bin => {
@@ -727,18 +752,23 @@
                 let color;
 
                 if (bin.status === 'full') {
-                    color = '#FF0000';
+                    color = '#FF0000'; // Red
                 } else if (bin.status === 'near-full') {
-                    color = '#FFA500';
+                    color = '#FFA500'; // Orange
+                } else if (bin.status === 'collected') {
+                    color = '#008000'; // Green
+                } else if (bin.status === 'issue') { // New status for skipped/issue bins
+                    color = '#FF4500'; // Orange-red for issues
                 } else {
-                    color = '#008000';
+                    color = '#808080'; // Default grey for other statuses
                 }
                 drawPinMarker(context, x, y, color, drawTrashCanShape);
             });
 
-            if (showDriver) {
-                const driverX = driverLocation.x * scaleX;
-                const driverY = driverLocation.y * scaleY;
+            // --- Draw Driver's Location ---
+            if (showDriver && currentDriverPos.x !== 0 && currentDriverPos.y !== 0) {
+                const driverX = currentDriverPos.x * scaleX;
+                const driverY = currentDriverPos.y * scaleY;
                 drawPinMarker(context, driverX, driverY, '#0000FF', drawCarShape);
             }
         }
@@ -753,7 +783,9 @@
                 remainingStopsDisplay.textContent = 'Tất cả lộ trình đã hoàn thành!';
                 showMessageBox('Hoàn thành', 'Tất cả lộ trình đã được hoàn thành. Tuyệt vời!');
                 if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-                drawMap(driverMapCanvas, driverCtx, true, []); // Clear map of bins
+                drawMap(driverMapCanvas, driverCtx, true, [], [], [], { x: 0, y: 0, binId: null }); // Clear map of bins and driver
+                driverCollectedPath = []; // Clear path history
+                driverCurrentPosition = { x: 0, y: 0, binId: null }; // Reset driver position
                 return;
             }
 
@@ -761,12 +793,76 @@
             currentRouteIdDisplay.textContent = `LT-00${currentRouteIndex + 1}`;
 
             let collectedCount = 0;
+            let currentRouteCollectedCoords = []; // For the solid path (only collected bins)
+            let lastHandledBinCoords = null; // The actual last bin the driver was at (collected or issue)
+
+            // Populate currentRouteCollectedCoords and find lastHandledBinCoords
             currentRouteBins.forEach(binId => {
                 const bin = binsData[binId];
                 if (bin.status === 'collected') {
                     collectedCount++;
+                    const coords = { x: bin.x, y: bin.y, binId: binId };
+                    currentRouteCollectedCoords.push(coords);
+                    lastHandledBinCoords = coords; // Update last visited to this collected bin
+                } else if (bin.status === 'issue') {
+                    // If a bin has an issue, the driver still "visits" its location to report it,
+                    // and this is considered the last visited point for the driver's current position.
+                    lastHandledBinCoords = { x: bin.x, y: bin.y, binId: binId };
+                }
+            });
+
+            // Set driver's current position based on the last handled bin or the start of the route
+            if (lastHandledBinCoords) {
+                driverCurrentPosition = lastHandledBinCoords;
+            } else if (currentRouteBins.length > 0) {
+                // If no bins are collected or issued yet, driver is at the first bin's location
+                const firstBinId = currentRouteBins[0];
+                driverCurrentPosition = { x: binsData[firstBinId].x, y: binsData[firstBinId].y, binId: firstBinId };
+            } else {
+                driverCurrentPosition = { x: 0, y: 0, binId: null }; // Fallback for empty route
+            }
+
+            driverCollectedPath = currentRouteCollectedCoords; // This is the path of successfully collected bins
+
+            // Calculate Planned Route (dashed line)
+            let plannedRouteCoords = [];
+            let unhandledBins = currentRouteBins.filter(binId => binsData[binId].status !== 'collected' && binsData[binId].status !== 'issue');
+            let currentPathPoint = { ...driverCurrentPosition }; // Start from current driver position
+
+            if (currentPathPoint.x !== 0 || currentPathPoint.y !== 0) {
+                plannedRouteCoords.push(currentPathPoint);
+            }
+
+            // Simple nearest neighbor for planning the rest of the route
+            while (unhandledBins.length > 0) {
+                let closestBinId = null;
+                let minDistance = Infinity;
+
+                for (const binId of unhandledBins) {
+                    const binCoords = binsData[binId];
+                    const dist = calculateManhattanDistance(currentPathPoint, binCoords); // Use Manhattan distance for grid
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestBinId = binId;
+                    }
                 }
 
+                if (closestBinId) {
+                    const closestBinCoords = binsData[closestBinId];
+                    plannedRouteCoords.push(closestBinCoords);
+                    currentPathPoint = closestBinCoords;
+                    unhandledBins = unhandledBins.filter(id => id !== closestBinId); // Remove from unhandled
+                } else {
+                    break; // Should not happen if unhandledBins is not empty
+                }
+            }
+
+
+            // Render list items (only showing pending bins)
+            driverBinList.innerHTML = ''; // Clear existing list
+            const pendingBinsForDisplay = currentRouteBins.filter(binId => binsData[binId].status !== 'collected' && binsData[binId].status !== 'issue');
+            pendingBinsForDisplay.forEach(binId => {
+                const bin = binsData[binId];
                 const li = document.createElement('li');
                 li.className = `flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors`;
                 li.dataset.binId = binId;
@@ -780,9 +876,9 @@
                 } else if (bin.status === 'near-full') {
                     statusColorClass = 'bg-yellow-100 text-yellow-800';
                     statusText = 'Gần đầy';
-                } else {
-                    statusColorClass = 'bg-green-100 text-green-800';
-                    statusText = 'Đã thu gom';
+                } else if (bin.status === 'issue') { // Should not be in this list, but for safety
+                    statusColorClass = 'bg-orange-100 text-orange-800';
+                    statusText = 'Có sự cố';
                 }
 
                 li.innerHTML = `
@@ -807,11 +903,14 @@
                 });
                 driverBinList.appendChild(li);
             });
-            remainingStopsDisplay.textContent = `${currentRouteBins.length - collectedCount}/${currentRouteBins.length}`;
 
-            // Redraw map for the driver app with only current route bins
+            // Calculate remaining stops (not collected and not issue)
+            const remainingBinsForDisplay = currentRouteBins.filter(binId => binsData[binId].status !== 'collected' && binsData[binId].status !== 'issue');
+            remainingStopsDisplay.textContent = `${remainingBinsForDisplay.length}/${currentRouteBins.length}`;
+
+
             if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-            drawMap(driverMapCanvas, driverCtx, true, currentRouteBins);
+            drawMap(driverMapCanvas, driverCtx, true, currentRouteBins, driverCollectedPath, plannedRouteCoords, driverCurrentPosition);
         }
 
         // Function to check if the current route is completed and advance
@@ -819,13 +918,14 @@
             if (currentRouteIndex >= routesData.length) return; // No more routes
 
             const currentRouteBins = routesData[currentRouteIndex];
-            const allCollected = currentRouteBins.every(binId => binsData[binId].status === 'collected');
+            // A route is considered complete if all bins are either 'collected' or 'issue'
+            const allHandled = currentRouteBins.every(binId => binsData[binId].status === 'collected' || binsData[binId].status === 'issue');
 
-            if (allCollected) {
+            if (allHandled) {
                 currentRouteIndex++;
                 renderDriverRouteBins(); // Load the next route or show completion message
             } else {
-                renderDriverRouteBins(); // Just re-render current route to update counts
+                renderDriverRouteBins(); // Just re-render current route to update counts and map
             }
         }
 
@@ -877,8 +977,8 @@
                 return;
             }
             const issuesCollectionRef = collection(db, `artifacts/${appId}/public/data/issues`);
-            // Order by timestamp to show latest issues first, if timestamp exists
-            // Note: Firebase requires an index for orderBy. For simplicity, we'll sort in client.
+            // Note: Removed orderBy from the query to prevent potential index errors.
+            // Data will be sorted client-side.
             const q = query(issuesCollectionRef);
 
             onSnapshot(q, (snapshot) => {
@@ -897,7 +997,7 @@
                     issues.push({ id: doc.id, ...doc.data() });
                 });
 
-                // Sort issues by timestamp (latest first) if timestamp exists
+                // Sort issues by timestamp (latest first) client-side
                 issues.sort((a, b) => {
                     const timeA = a.timestamp ? a.timestamp.toDate().getTime() : 0;
                     const timeB = b.timestamp ? b.timestamp.toDate().getTime() : 0;
@@ -983,15 +1083,18 @@
         if (markCollectedBtn) {
             markCollectedBtn.addEventListener('click', () => {
                 if (currentBinId) {
-                    // Simulate updating status in dummy data
+                    // Update status in dummy data
                     binsData[currentBinId].status = "collected";
-                    binsData[currentBinId].level = "20% Đã thu gom";
+                    binsData[currentBinId].level = "20% Đã thu gom"; // Update level to reflect collection
                     binsData[currentBinId].lastCollected = new Date().toLocaleString('vi-VN');
+
+                    // Update driver's position
+                    driverCurrentPosition = { x: binsData[currentBinId].x, y: binsData[currentBinId].y, binId: currentBinId };
 
                     showMessageBox('Thành công', `Thùng rác ${currentBinId} đã được đánh dấu là đã thu gom.`);
                     driverScreen2.classList.add('hidden');
                     driverScreen1.classList.remove('hidden');
-                    checkAndAdvanceRoute(); // Check route completion and advance
+                    checkAndAdvanceRoute(); // Check route completion and advance, which re-renders driver map
                     // Redraw dashboard map to reflect collected bin status (if it was 'full' or 'near-full')
                     if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
                     drawMap(dashboardMapCanvas, dashboardCtx, false);
@@ -1041,9 +1144,23 @@
                 }
 
                 if (currentBinId && userId) {
-                    await addIssue(currentBinId, issueType, notes, userId);
+                    // Update bin status to 'issue' in dummy data
+                    binsData[currentBinId].status = "issue";
+                    binsData[currentBinId].level = "Có sự cố"; // Update level for issue
+                    binsData[currentBinId].lastCollected = new Date().toLocaleString('vi-VN'); // Update timestamp for issue
+
+                    await addIssue(currentBinId, issueType, notes, userId); // Add to Firestore
+
+                    // Update driver's position to the skipped bin's location
+                    driverCurrentPosition = { x: binsData[currentBinId].x, y: binsData[currentBinId].y, binId: currentBinId };
+
+                    showMessageBox('Thông báo', `Thùng rác ${currentBinId} đã được báo cáo sự cố.`);
                     driverScreen3.classList.add('hidden');
                     driverScreen1.classList.remove('hidden');
+                    checkAndAdvanceRoute(); // Re-render driver app to reflect skipped bin
+                    // Redraw dashboard map to reflect issue bin status
+                    if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
+                    drawMap(dashboardMapCanvas, dashboardCtx, false);
                     // Clear radio buttons and notes after submission
                     document.querySelectorAll('input[name="issueType"]').forEach(radio => radio.checked = false);
                     document.getElementById('otherIssueNotes').value = '';
@@ -1119,6 +1236,12 @@
 
                 if (driverMapCanvas) {
                     driverCtx = driverMapCanvas.getContext('2d');
+                    // Set initial driver position to the first bin of the first route if available
+                    if (routesData.length > 0 && routesData[0].length > 0) {
+                        const firstBinId = routesData[0][0];
+                        driverCurrentPosition = { x: binsData[firstBinId].x, y: binsData[firstBinId].y, binId: firstBinId };
+                        driverCollectedPath = []; // Path history starts empty
+                    }
                     // Initial draw for driver app will be handled by renderDriverRouteBins after auth
                 }
             }
@@ -1131,14 +1254,45 @@
                 drawMap(dashboardMapCanvas, dashboardCtx, false); // Redraw dashboard without driver
             } else if (!driverAppSection.classList.contains('hidden')) {
                 if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-                // Redraw driver map with current route bins
+                // Recalculate planned path on resize to ensure it's correct
                 const currentRouteBins = routesData[currentRouteIndex] || [];
-                drawMap(driverMapCanvas, driverCtx, true, currentRouteBins);
+                let plannedRouteCoords = [];
+                let unhandledBins = currentRouteBins.filter(binId => binsData[binId].status !== 'collected' && binsData[binId].status !== 'issue');
+                let currentPathPoint = { ...driverCurrentPosition };
+
+                if (currentPathPoint.x !== 0 || currentPathPoint.y !== 0) {
+                    plannedRouteCoords.push(currentPathPoint);
+                }
+
+                while (unhandledBins.length > 0) {
+                    let closestBinId = null;
+                    let minDistance = Infinity;
+
+                    for (const binId of unhandledBins) {
+                        const binCoords = binsData[binId];
+                        const dist = calculateManhattanDistance(currentPathPoint, binCoords);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closestBinId = binId;
+                        }
+                    }
+
+                    if (closestBinId) {
+                        const closestBinCoords = binsData[closestBinId];
+                        plannedRouteCoords.push(closestBinCoords);
+                        currentPathPoint = closestBinCoords;
+                        unhandledBins = unhandledBins.filter(id => id !== closestBinId);
+                    } else {
+                        break;
+                    }
+                }
+                drawMap(driverMapCanvas, driverCtx, true, currentRouteBins, driverCollectedPath, plannedRouteCoords, driverCurrentPosition);
             }
         });
 
     </script>
 </body>
 </html>
+
 
 
