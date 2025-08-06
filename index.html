@@ -11,61 +11,56 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f0f2f5;
-            /* Ensure full height on mobile devices */
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start; /* Align to top, allow content to push down */
-            padding: 1rem; /* p-4, slightly less padding for mobile */
+            justify-content: flex-start;
+            padding: 1rem;
         }
         .container-wrapper {
             display: flex;
-            flex-direction: column; /* Default to column for mobile */
-            gap: 1.5rem; /* gap-6 */
-            padding: 0; /* Remove padding here as body already has it */
+            flex-direction: column;
+            gap: 1.5rem;
+            padding: 0;
             max-width: 1200px;
-            width: 100%; /* Ensure it takes full width */
+            width: 100%;
             margin: auto;
         }
-        @media (min-width: 1024px) { /* lg breakpoint */
+        @media (min-width: 1024px) {
             .container-wrapper {
-                flex-direction: row; /* Switch to row on larger screens */
+                flex-direction: row;
             }
         }
-        /* Header / View Toggles styling */
         .header-toggles {
             width: 100%;
             max-width: 4xl;
             background-color: #ffffff;
-            padding: 1rem; /* p-4 */
-            border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
-            margin-bottom: 1.5rem; /* mb-6 */
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 1.5rem;
             display: flex;
             justify-content: center;
-            gap: 1rem; /* gap-4 */
+            gap: 1rem;
         }
-        /* Main sections styling */
         #driverApp, #dashboard {
-            width: 100%; /* Take full width on mobile */
+            width: 100%;
             background-color: #ffffff;
-            border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
-            padding: 1.5rem; /* p-6 */
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem; /* gap-6 */
-            transform: translateY(0); /* Ensure no initial transform */
+            gap: 1.5rem;
+            transform: translateY(0);
             transition: transform 0.3s ease-in-out;
         }
         @media (min-width: 1024px) {
             #driverApp, #dashboard {
-                width: 50%; /* lg:w-1/2 */
+                width: 50%;
             }
         }
-
-        /* Custom scrollbar for better aesthetics */
         .overflow-y-auto::-webkit-scrollbar {
             width: 8px;
         }
@@ -81,19 +76,46 @@
             background: #555;
         }
         canvas {
-            background-color: #f8f8f8; /* Light background for the map */
-            border-radius: 0.5rem; /* rounded-lg */
+            background-color: #f8f8f8;
+            border-radius: 0.5rem;
             display: block;
             width: 100%;
             height: 100%;
         }
-        /* Ensure tables are responsive */
         .overflow-x-auto {
-            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+            -webkit-overflow-scrolling: touch;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
 
     <!-- Header / View Toggles -->
     <div class="header-toggles">
@@ -116,10 +138,10 @@
             <div id="driverScreen1" class="bg-blue-50 p-6 rounded-lg shadow-inner">
                 <h3 class="text-xl font-semibold text-blue-800 mb-4">Lộ trình hôm nay</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
-                    <p><strong>Lộ trình:</strong> LT-001</p>
+                    <p><strong>Lộ trình:</strong> <span id="currentRouteId">LT-001</span></p>
                     <p><strong>Xe:</strong> 29A-123.45</p>
                     <p><strong>Tài xế:</strong> Trần Tùng Em</p>
-                    <p><strong>Điểm dừng còn lại:</strong> <span class="font-bold text-blue-600">5/15</span></p>
+                    <p><strong>Điểm dừng còn lại:</strong> <span class="font-bold text-blue-600" id="remainingStops">5/15</span></p>
                 </div>
                 <!-- Canvas for Driver Map -->
                 <div class="mt-6 bg-gray-200 h-48 rounded-lg flex items-center justify-center overflow-hidden">
@@ -127,43 +149,8 @@
                 </div>
                 <div class="mt-6">
                     <h4 class="font-semibold text-gray-800 mb-2">Danh sách điểm dừng</h4>
-                    <ul class="space-y-3 overflow-y-auto max-h-60 pr-2">
-                        <!-- Example Bin Item -->
-                        <li class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" data-bin-id="TR-101" data-bin-status="full">
-                            <div>
-                                <p class="font-medium text-gray-900">Thùng rác: TR-101</p>
-                                <p class="text-sm text-gray-600">123 Đường B, Phường X</p>
-                            </div>
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">95% Đầy</span>
-                        </li>
-                        <li class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" data-bin-id="TR-102" data-bin-status="near-full">
-                            <div>
-                                <p class="font-medium text-gray-900">Thùng rác: TR-102</p>
-                                <p class="text-sm text-gray-600">456 Đường C, Phường Y</p>
-                            </div>
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">70% Gần đầy</span>
-                        </li>
-                         <li class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" data-bin-id="TR-103" data-bin-status="collected">
-                            <div>
-                                <p class="font-medium text-gray-900">Thùng rác: TR-103</p>
-                                <p class="text-sm text-gray-600">789 Đường D, Phường Z</p>
-                            </div>
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Đã thu gom</span>
-                        </li>
-                        <li class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" data-bin-id="TR-104" data-bin-status="full">
-                            <div>
-                                <p class="font-medium text-gray-900">Thùng rác: TR-104</p>
-                                <p class="text-sm text-gray-600">101 Đường E, Phường A</p>
-                            </div>
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">90% Đầy</span>
-                        </li>
-                        <li class="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors" data-bin-id="TR-105" data-bin-status="near-full">
-                            <div>
-                                <p class="font-medium text-gray-900">Thùng rác: TR-105</p>
-                                <p class="text-sm text-gray-600">202 Đường F, Phường B</p>
-                            </div>
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">65% Gần đầy</span>
-                        </li>
+                    <ul class="space-y-3 overflow-y-auto max-h-60 pr-2" id="driverBinList">
+                        <!-- Bin items will be loaded here dynamically -->
                     </ul>
                 </div>
             </div>
@@ -227,7 +214,7 @@
         </div>
 
         <!-- Dashboard Section -->
-        <div id="dashboard">
+        <div id="dashboard" class="hidden">
             <h2 class="text-2xl font-bold text-gray-800 text-center mb-4">Dashboard Trung tâm</h2>
 
             <!-- Màn hình 1: Tổng quan -->
@@ -258,6 +245,17 @@
                 <button id="viewRoutesBtn" class="mt-6 w-full px-6 py-3 rounded-lg font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors shadow-md">
                     Xem Lộ trình & Thùng rác chi tiết
                 </button>
+
+                <!-- Issues Section -->
+                <div class="mt-6">
+                    <h4 class="font-semibold text-gray-800 mb-2">Sự cố đã báo cáo</h4>
+                    <ul class="space-y-3 overflow-y-auto max-h-60 pr-2" id="reportedIssuesList">
+                        <!-- Reported issues will be loaded here dynamically -->
+                        <li class="p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-gray-700">
+                            <p class="font-medium">Không có sự cố nào được báo cáo.</p>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Màn hình 2: Quản lý Lộ trình & Thùng rác (ẩn ban đầu) -->
@@ -372,20 +370,63 @@
         </div>
     </div>
 
-    <script>
-        // Dummy data for demonstration
+    <script type="module">
+        // Firebase SDK imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let userId = null; // Will store the authenticated user ID
+
+        // Authenticate user
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("Firebase Authenticated. User ID:", userId);
+                // After authentication, load initial data and set up listeners
+                renderDriverRouteBins(); // Initial load for driver app
+                setupIssuesListener(); // Setup listener for dashboard issues
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        console.log("Signed in with custom token.");
+                    } else {
+                        await signInAnonymously(auth);
+                        console.log("Signed in anonymously.");
+                    }
+                } catch (error) {
+                    console.error("Firebase authentication error:", error);
+                    showMessageBox('Lỗi xác thực', 'Không thể kết nối với dịch vụ xác thực. Vui lòng thử lại.');
+                }
+            }
+        });
+
+        // Dummy data for demonstration (in a real app, these would also come from Firestore)
         const binsData = {
-            "TR-101": { address: "Thùng rác: TR-101", level: "95% Đầy", lastCollected: "2025-08-05 10:30 AM", status: "full", x: 100, y: 80 },
-            "TR-102": { address: "Thùng rác: TR-102", level: "70% Gần đầy", lastCollected: "2025-08-05 11:00 AM", status: "near-full", x: 250, y: 180 },
-            "TR-103": { address: "Thùng rác: TR-103", level: "20% Đã thu gom", lastCollected: "2025-08-06 09:00 AM", status: "collected", x: 400, y: 80 },
-            "TR-104": { address: "Thùng rác: TR-104", level: "90% Đầy", lastCollected: "2025-08-05 12:00 PM", status: "full", x: 150, y: 300 },
-            "TR-105": { address: "Thùng rác: TR-105", level: "65% Gần đầy", lastCollected: "2025-08-05 01:00 PM", status: "near-full", x: 350, y: 250 }
+            "TR-101": { address: "123 Đường B, Phường X", level: "95% Đầy", lastCollected: "2025-08-05 10:30 AM", status: "full", x: 100, y: 80 },
+            "TR-102": { address: "456 Đường C, Phường Y", level: "70% Gần đầy", lastCollected: "2025-08-05 11:00 AM", status: "near-full", x: 250, y: 180 },
+            "TR-103": { address: "789 Đường D, Phường Z", level: "20% Đã thu gom", lastCollected: "2025-08-06 09:00 AM", status: "collected", x: 400, y: 80 },
+            "TR-104": { address: "101 Đường E, Phường A", level: "90% Đầy", lastCollected: "2025-08-05 12:00 PM", status: "full", x: 150, y: 300 },
+            "TR-105": { address: "202 Đường F, Phường B", level: "65% Gần đầy", lastCollected: "2025-08-05 01:00 PM", status: "near-full", x: 350, y: 250 }
         };
 
         const routesData = [
-            ["TR-101", "TR-102", "TR-103"],
-            ["TR-104", "TR-105"]
+            ["TR-101", "TR-102", "TR-103"], // Route 1
+            ["TR-104", "TR-105"]            // Route 2
         ];
+
+        let currentRouteIndex = 0; // Keep track of the current active route
 
         // Dummy data for driver's current location
         const driverLocation = { x: 120, y: 120 }; // Initial driver location
@@ -400,8 +441,11 @@
         const driverScreen1 = document.getElementById('driverScreen1');
         const driverScreen2 = document.getElementById('driverScreen2');
         const driverScreen3 = document.getElementById('driverScreen3');
-        const driverMapCanvas = document.getElementById('driverMapCanvas'); // Get driver map canvas
-        let driverCtx = null; // Context for drawing on driver canvas
+        const driverMapCanvas = document.getElementById('driverMapCanvas');
+        const driverBinList = document.getElementById('driverBinList');
+        const currentRouteIdDisplay = document.getElementById('currentRouteId');
+        const remainingStopsDisplay = document.getElementById('remainingStops');
+        let driverCtx = null;
 
         // Driver App Detail Elements
         const binDetailId = document.getElementById('binDetailId');
@@ -420,8 +464,9 @@
         // Dashboard Screens
         const dashboardScreen1 = document.getElementById('dashboardScreen1');
         const dashboardScreen2 = document.getElementById('dashboardScreen2');
-        const dashboardMapCanvas = document.getElementById('dashboardMapCanvas'); // Get dashboard map canvas
-        let dashboardCtx = null; // Context for drawing on dashboard canvas
+        const dashboardMapCanvas = document.getElementById('dashboardMapCanvas');
+        const reportedIssuesList = document.getElementById('reportedIssuesList');
+        let dashboardCtx = null;
 
         // Dashboard Buttons
         const viewRoutesBtn = document.getElementById('viewRoutesBtn');
@@ -436,46 +481,50 @@
         const messageBoxTitle = document.getElementById('messageBoxTitle');
         const messageBoxContent = document.getElementById('messageBoxContent');
         const messageBoxCloseBtn = document.getElementById('messageBoxCloseBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
 
-        let currentBinId = null; // To store the ID of the currently selected bin in driver app
+        let currentBinId = null;
 
         // --- Utility Functions ---
 
-        // Function to show custom message box
         function showMessageBox(title, message) {
             messageBoxTitle.textContent = title;
             messageBoxContent.textContent = message;
             messageBox.classList.remove('hidden');
         }
 
-        // Function to hide custom message box
         function hideMessageBox() {
             messageBox.classList.add('hidden');
         }
 
-        // Function to draw a custom pin marker with an inner content
+        function showLoading() {
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
         function drawPinMarker(context, x, y, pinColor, contentCallback) {
             const pinWidth = 24;
             const pinHeight = 36;
-            const circleRadius = 8; // Radius of the white circle inside
+            const circleRadius = 8;
 
             context.save();
             context.translate(x, y);
 
-            // Draw the teardrop shape
             context.beginPath();
-            context.moveTo(0, -pinHeight / 2); // Top point
-            context.bezierCurveTo(pinWidth / 2, -pinHeight / 2, pinWidth / 2, pinHeight / 4, 0, pinHeight / 2 - circleRadius); // Right curve
-            context.bezierCurveTo(-pinWidth / 2, pinHeight / 4, -pinWidth / 2, -pinHeight / 2, 0, -pinHeight / 2); // Left curve
+            context.moveTo(0, -pinHeight / 2);
+            context.bezierCurveTo(pinWidth / 2, -pinHeight / 2, pinWidth / 2, pinHeight / 4, 0, pinHeight / 2 - circleRadius);
+            context.bezierCurveTo(-pinWidth / 2, pinHeight / 4, -pinWidth / 2, -pinHeight / 2, 0, -pinHeight / 2);
             context.closePath();
             context.fillStyle = pinColor;
             context.shadowColor = 'rgba(0, 0, 0, 0.3)';
             context.shadowBlur = 5;
             context.shadowOffsetY = 3;
             context.fill();
-            context.shadowColor = 'transparent'; // Reset shadow
+            context.shadowColor = 'transparent';
 
-            // Draw the circle at the bottom of the teardrop
             context.beginPath();
             context.arc(0, pinHeight / 2 - circleRadius, circleRadius, 0, Math.PI * 2);
             context.fillStyle = 'white';
@@ -484,34 +533,28 @@
             context.lineWidth = 2;
             context.stroke();
 
-            // Draw content inside the white circle
-            // The contentCallback will receive the context and the center of the circle (0, pinHeight/2 - circleRadius)
-            // Adjust contentCallback to draw at (0,0) relative to its own translation if needed.
             context.save();
-            context.translate(0, pinHeight / 2 - circleRadius); // Move origin to center of white circle
+            context.translate(0, pinHeight / 2 - circleRadius);
             contentCallback(context);
             context.restore();
 
             context.restore();
         }
 
-        // Helper function to draw a stylized trash can icon
         function drawTrashCanShape(context) {
             const canWidth = 12;
             const canHeight = 12;
             const lidHeight = 3;
 
-            context.fillStyle = '#666'; // Dark grey for trash can body
+            context.fillStyle = '#666';
             context.strokeStyle = '#333';
             context.lineWidth = 1;
 
-            // Body
             context.beginPath();
             context.rect(-canWidth / 2, -canHeight / 2 + lidHeight, canWidth, canHeight - lidHeight);
             context.fill();
             context.stroke();
 
-            // Lid
             context.beginPath();
             context.moveTo(-canWidth / 2 - 2, -canHeight / 2 + lidHeight);
             context.lineTo(canWidth / 2 + 2, -canHeight / 2 + lidHeight);
@@ -521,39 +564,34 @@
             context.fill();
             context.stroke();
 
-            // Handle on lid
             context.beginPath();
             context.rect(-2, -canHeight / 2 - 2, 4, 2);
             context.fill();
             context.stroke();
         }
 
-        // Helper function to draw a more detailed car icon inside a pin
         function drawCarShape(context) {
-            const carWidth = 18; // Slightly larger
+            const carWidth = 18;
             const carHeight = 10;
-            const wheelRadius = 2.5; // Slightly larger wheels
+            const wheelRadius = 2.5;
 
-            context.fillStyle = '#333'; // Dark grey for car body
-            context.strokeStyle = '#000'; // Black outline
+            context.fillStyle = '#333';
+            context.strokeStyle = '#000';
             context.lineWidth = 1;
 
-            // Car body
             context.beginPath();
             context.moveTo(-carWidth / 2, carHeight / 2);
             context.lineTo(carWidth / 2, carHeight / 2);
-            context.lineTo(carWidth / 2, -carHeight / 2 + 2); // Back top
-            context.lineTo(carWidth / 2 - 4, -carHeight / 2 - 2); // Back windshield bottom
-            context.lineTo(-carWidth / 2 + 4, -carHeight / 2 - 2); // Front windshield bottom
-            context.lineTo(-carWidth / 2, -carHeight / 2 + 2); // Front top
+            context.lineTo(carWidth / 2, -carHeight / 2 + 2);
+            context.lineTo(carWidth / 2 - 4, -carHeight / 2 - 2);
+            context.lineTo(-carWidth / 2 + 4, -carHeight / 2 - 2);
+            context.lineTo(-carWidth / 2, -carHeight / 2 + 2);
             context.closePath();
             context.fill();
             context.stroke();
 
-            // Windows
-            context.fillStyle = '#ADD8E6'; // Light blue for windows
+            context.fillStyle = '#ADD8E6';
             context.beginPath();
-            // Front windshield
             context.moveTo(-carWidth / 2 + 4, -carHeight / 2 - 1.5);
             context.lineTo(carWidth / 2 - 4, -carHeight / 2 - 1.5);
             context.lineTo(carWidth / 2 - 4, -carHeight / 2 + 1);
@@ -561,50 +599,39 @@
             context.closePath();
             context.fill();
 
-            // Side window (simplified)
             context.beginPath();
             context.rect(-carWidth / 2 + 2, -carHeight / 2 + 2.5, carWidth - 4, carHeight - 5);
             context.fill();
 
-
-            // Wheels
-            context.fillStyle = '#000'; // Black for wheels
+            context.fillStyle = '#000';
             context.beginPath();
             context.arc(-carWidth / 2 + wheelRadius + 2, carHeight / 2, wheelRadius, 0, Math.PI * 2);
             context.arc(carWidth / 2 - wheelRadius - 2, carHeight / 2, wheelRadius, 0, Math.PI * 2);
             context.fill();
         }
 
-
-        // Function to draw a generic map (used by both driver and dashboard)
-        function drawMap(canvas, context, showDriver = false) {
+        // drawMap now accepts an optional array of activeBinIds to draw
+        function drawMap(canvas, context, showDriver = false, activeBinIds = null) {
             if (!canvas || !context) {
                 console.error("Lỗi: Canvas hoặc context không hợp lệ.");
                 return;
             }
 
-            // Set canvas dimensions to match its display size for responsiveness
             const container = canvas.parentElement;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
 
-            // Clear canvas
             context.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Scale factor to fit dummy coordinates (500x350 assumed original for better detail) to current canvas size
-            const originalMapWidth = 600; // Increased for more detail
-            const originalMapHeight = 400; // Increased for more detail
+            const originalMapWidth = 600;
+            const originalMapHeight = 400;
             const scaleX = canvas.width / originalMapWidth;
             const scaleY = canvas.height / originalMapHeight;
 
-            // --- Draw Map Background ---
-
-            // Base map color
-            context.fillStyle = '#F0F0F0'; // Light grey for general land
+            context.fillStyle = '#F0F0F0';
             context.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Green areas (parks)
-            context.fillStyle = '#C8E6C9'; // Light green
+            context.fillStyle = '#C8E6C9';
             context.beginPath();
             context.moveTo(50 * scaleX, 50 * scaleY);
             context.lineTo(200 * scaleX, 50 * scaleY);
@@ -614,13 +641,12 @@
             context.fill();
 
             context.beginPath();
-            context.arc(450 * scaleX, 100 * scaleY, 80 * scaleX, 0, Math.PI * 2); // Circular park
+            context.arc(450 * scaleX, 100 * scaleY, 80 * scaleX, 0, Math.PI * 2);
             context.fill();
 
-            // Water bodies (lakes/rivers)
-            context.fillStyle = '#A7D9ED'; // Light blue for water
+            context.fillStyle = '#A7D9ED';
             context.beginPath();
-            context.arc(100 * scaleX, 300 * scaleY, 60 * scaleX, 0, Math.PI * 2); // Lake
+            context.arc(100 * scaleX, 300 * scaleY, 60 * scaleX, 0, Math.PI * 2);
             context.fill();
 
             context.beginPath();
@@ -631,11 +657,9 @@
             context.closePath();
             context.fill();
 
-            // Roads
-            context.strokeStyle = '#D3D3D3'; // Light grey for roads
-            context.lineWidth = 12; // Thicker main roads
+            context.strokeStyle = '#D3D3D3';
+            context.lineWidth = 12;
 
-            // Horizontal roads
             context.beginPath();
             context.moveTo(0 * scaleX, 80 * scaleY);
             context.lineTo(canvas.width, 80 * scaleY);
@@ -645,7 +669,6 @@
             context.lineTo(canvas.width, 260 * scaleY);
             context.stroke();
 
-            // Vertical roads
             context.beginPath();
             context.moveTo(100 * scaleX, 0 * scaleY);
             context.lineTo(100 * scaleX, canvas.height);
@@ -655,10 +678,9 @@
             context.lineTo(400 * scaleX, canvas.height);
             context.stroke();
 
-            // Add dashed lines for road lanes
-            context.strokeStyle = '#FFFFFF'; // White for lane lines
+            context.strokeStyle = '#FFFFFF';
             context.lineWidth = 2;
-            context.setLineDash([8, 8]); // Longer dashes
+            context.setLineDash([8, 8]);
 
             context.beginPath();
             context.moveTo(0 * scaleX, 80 * scaleY); context.lineTo(canvas.width, 80 * scaleY);
@@ -669,13 +691,16 @@
             context.moveTo(250 * scaleX, 0 * scaleY); context.lineTo(250 * scaleX, canvas.height);
             context.moveTo(400 * scaleX, 0 * scaleY); context.lineTo(400 * scaleX, canvas.height);
             context.stroke();
-            context.setLineDash([]); // Reset line dash
+            context.setLineDash([]);
 
-            // --- Draw Routes ---
             context.lineWidth = 3;
-            context.strokeStyle = '#007bff'; // Blue for routes
-            context.setLineDash([5, 5]); // Dashed line for routes
-            routesData.forEach(route => {
+            context.strokeStyle = '#007bff';
+            context.setLineDash([5, 5]);
+
+            // Draw routes based on activeBinIds or all routes
+            const routesToDraw = activeBinIds ? [activeBinIds] : routesData;
+
+            routesToDraw.forEach(route => {
                 context.beginPath();
                 route.forEach((binId, index) => {
                     const bin = binsData[binId];
@@ -691,32 +716,237 @@
                 });
                 context.stroke();
             });
-            context.setLineDash([]); // Reset line dash
+            context.setLineDash([]);
 
-            // --- Draw Bins ---
-            Object.values(binsData).forEach(bin => {
+            // Draw bins based on activeBinIds or all bins
+            const binsToDraw = activeBinIds ? activeBinIds.map(id => binsData[id]) : Object.values(binsData);
+
+            binsToDraw.forEach(bin => {
                 const x = bin.x * scaleX;
                 const y = bin.y * scaleY;
                 let color;
 
                 if (bin.status === 'full') {
-                    color = '#FF0000'; // Red
+                    color = '#FF0000';
                 } else if (bin.status === 'near-full') {
-                    color = '#FFA500'; // Orange
+                    color = '#FFA500';
                 } else {
-                    color = '#008000'; // Green
+                    color = '#008000';
                 }
-                drawPinMarker(context, x, y, color, drawTrashCanShape); // Draw trash can icon inside the pin
+                drawPinMarker(context, x, y, color, drawTrashCanShape);
             });
 
-            // --- Draw Driver's Location ---
-            // This part is conditional based on the 'showDriver' parameter
             if (showDriver) {
                 const driverX = driverLocation.x * scaleX;
                 const driverY = driverLocation.y * scaleY;
-                drawPinMarker(context, driverX, driverY, '#0000FF', drawCarShape); // Blue pin with car icon
+                drawPinMarker(context, driverX, driverY, '#0000FF', drawCarShape);
             }
         }
+
+        // --- Firebase Functions ---
+
+        // Function to render bins for the current active route in Driver App
+        function renderDriverRouteBins() {
+            driverBinList.innerHTML = ''; // Clear existing list
+            if (currentRouteIndex >= routesData.length) {
+                currentRouteIdDisplay.textContent = 'Hoàn thành';
+                remainingStopsDisplay.textContent = 'Tất cả lộ trình đã hoàn thành!';
+                showMessageBox('Hoàn thành', 'Tất cả lộ trình đã được hoàn thành. Tuyệt vời!');
+                if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
+                drawMap(driverMapCanvas, driverCtx, true, []); // Clear map of bins
+                return;
+            }
+
+            const currentRouteBins = routesData[currentRouteIndex];
+            currentRouteIdDisplay.textContent = `LT-00${currentRouteIndex + 1}`;
+
+            let collectedCount = 0;
+            currentRouteBins.forEach(binId => {
+                const bin = binsData[binId];
+                if (bin.status === 'collected') {
+                    collectedCount++;
+                }
+
+                const li = document.createElement('li');
+                li.className = `flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors`;
+                li.dataset.binId = binId;
+                li.dataset.binStatus = bin.status;
+
+                let statusColorClass = '';
+                let statusText = '';
+                if (bin.status === 'full') {
+                    statusColorClass = 'bg-red-100 text-red-800';
+                    statusText = 'Đầy';
+                } else if (bin.status === 'near-full') {
+                    statusColorClass = 'bg-yellow-100 text-yellow-800';
+                    statusText = 'Gần đầy';
+                } else {
+                    statusColorClass = 'bg-green-100 text-green-800';
+                    statusText = 'Đã thu gom';
+                }
+
+                li.innerHTML = `
+                    <div>
+                        <p class="font-medium text-gray-900">Thùng rác: ${binId}</p>
+                        <p class="text-sm text-gray-600">${bin.address}</p>
+                    </div>
+                    <span class="px-3 py-1 text-sm font-semibold rounded-full ${statusColorClass}">${bin.level.split(' ')[0]} ${statusText}</span>
+                `;
+                li.addEventListener('click', () => {
+                    currentBinId = li.dataset.binId;
+                    const binInfo = binsData[currentBinId];
+                    if (binInfo) {
+                        binDetailId.textContent = currentBinId;
+                        binDetailAddress.textContent = binInfo.address;
+                        binDetailLevel.textContent = binInfo.level;
+                        binDetailLastCollected.textContent = binInfo.lastCollected;
+                        binDetailNotes.value = '';
+                        driverScreen1.classList.add('hidden');
+                        driverScreen2.classList.remove('hidden');
+                    }
+                });
+                driverBinList.appendChild(li);
+            });
+            remainingStopsDisplay.textContent = `${currentRouteBins.length - collectedCount}/${currentRouteBins.length}`;
+
+            // Redraw map for the driver app with only current route bins
+            if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
+            drawMap(driverMapCanvas, driverCtx, true, currentRouteBins);
+        }
+
+        // Function to check if the current route is completed and advance
+        function checkAndAdvanceRoute() {
+            if (currentRouteIndex >= routesData.length) return; // No more routes
+
+            const currentRouteBins = routesData[currentRouteIndex];
+            const allCollected = currentRouteBins.every(binId => binsData[binId].status === 'collected');
+
+            if (allCollected) {
+                currentRouteIndex++;
+                renderDriverRouteBins(); // Load the next route or show completion message
+            } else {
+                renderDriverRouteBins(); // Just re-render current route to update counts
+            }
+        }
+
+
+        // Function to add a new issue to Firestore
+        async function addIssue(binId, issueType, notes, reportedBy) {
+            showLoading();
+            try {
+                const issuesCollectionRef = collection(db, `artifacts/${appId}/public/data/issues`);
+                await addDoc(issuesCollectionRef, {
+                    binId: binId,
+                    issueType: issueType,
+                    notes: notes,
+                    reportedBy: reportedBy,
+                    timestamp: serverTimestamp(), // Use server timestamp
+                    status: 'pending' // Initial status
+                });
+                showMessageBox('Thành công', 'Báo cáo sự cố đã được gửi.');
+            } catch (e) {
+                console.error("Lỗi khi thêm tài liệu:", e);
+                showMessageBox('Lỗi', 'Không thể gửi báo cáo sự cố. Vui lòng thử lại.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Function to update issue status in Firestore
+        async function updateIssueStatus(issueId, newStatus) {
+            showLoading();
+            try {
+                const issueDocRef = doc(db, `artifacts/${appId}/public/data/issues`, issueId);
+                await updateDoc(issueDocRef, {
+                    status: newStatus,
+                    resolvedAt: newStatus === 'resolved' ? serverTimestamp() : null
+                });
+                showMessageBox('Thành công', 'Trạng thái sự cố đã được cập nhật.');
+            } catch (e) {
+                console.error("Lỗi khi cập nhật tài liệu:", e);
+                showMessageBox('Lỗi', 'Không thể cập nhật trạng thái sự cố. Vui lòng thử lại.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Real-time listener for issues on Dashboard
+        function setupIssuesListener() {
+            if (!userId) {
+                console.warn("Chưa có User ID, không thể thiết lập lắng nghe sự cố.");
+                return;
+            }
+            const issuesCollectionRef = collection(db, `artifacts/${appId}/public/data/issues`);
+            // Order by timestamp to show latest issues first, if timestamp exists
+            // Note: Firebase requires an index for orderBy. For simplicity, we'll sort in client.
+            const q = query(issuesCollectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                reportedIssuesList.innerHTML = ''; // Clear current list
+                if (snapshot.empty) {
+                    reportedIssuesList.innerHTML = `
+                        <li class="p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-gray-700">
+                            <p class="font-medium">Không có sự cố nào được báo cáo.</p>
+                        </li>
+                    `;
+                    return;
+                }
+
+                const issues = [];
+                snapshot.forEach(doc => {
+                    issues.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sort issues by timestamp (latest first) if timestamp exists
+                issues.sort((a, b) => {
+                    const timeA = a.timestamp ? a.timestamp.toDate().getTime() : 0;
+                    const timeB = b.timestamp ? b.timestamp.toDate().getTime() : 0;
+                    return timeB - timeA;
+                });
+
+                issues.forEach(issue => {
+                    const li = document.createElement('li');
+                    li.className = `p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-gray-700 flex justify-between items-center`;
+                    let statusClass = '';
+                    let statusText = '';
+                    if (issue.status === 'pending') {
+                        statusClass = 'bg-red-100 text-red-800';
+                        statusText = 'Chờ xử lý';
+                    } else {
+                        statusClass = 'bg-green-100 text-green-800';
+                        statusText = 'Đã xử lý';
+                    }
+
+                    li.innerHTML = `
+                        <div>
+                            <p class="font-medium">Thùng rác: ${issue.binId}</p>
+                            <p class="text-sm text-gray-600">Sự cố: ${issue.issueType === 'broken' ? 'Thùng rác bị hỏng' :
+                                issue.issueType === 'blocked' ? 'Đường đi bị tắc' :
+                                issue.issueType === 'overflow' ? 'Lượng rác quá lớn' :
+                                issue.notes ? `Lý do khác: ${issue.notes}` : 'Không rõ lý do'}</p>
+                            <p class="text-xs text-gray-500">Báo cáo bởi: ${issue.reportedBy} vào ${issue.timestamp ? new Date(issue.timestamp.toDate()).toLocaleString('vi-VN') : 'N/A'}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusClass}">${statusText}</span>
+                            ${issue.status === 'pending' ? `<button class="mark-resolved-btn px-3 py-1 text-sm rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors" data-issue-id="${issue.id}">Đã xử lý</button>` : ''}
+                        </div>
+                    `;
+                    reportedIssuesList.appendChild(li);
+                });
+
+                // Add event listeners for "Mark as Resolved" buttons
+                document.querySelectorAll('.mark-resolved-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        const issueId = event.target.dataset.issueId;
+                        updateIssueStatus(issueId, 'resolved');
+                    });
+                });
+            }, (error) => {
+                console.error("Lỗi khi lắng nghe sự cố:", error);
+                showMessageBox('Lỗi dữ liệu', 'Không thể tải danh sách sự cố. Vui lòng kiểm tra kết nối.');
+            });
+        }
+
 
         // --- Event Listeners ---
 
@@ -729,11 +959,10 @@
                 driverAppBtn.classList.remove('bg-gray-200', 'text-gray-700');
                 dashboardBtn.classList.add('bg-gray-200', 'text-gray-700');
                 dashboardBtn.classList.remove('bg-blue-600', 'text-white');
-                // Draw driver map when driver app is shown
                 if (!driverCtx) {
                     driverCtx = driverMapCanvas.getContext('2d');
                 }
-                drawMap(driverMapCanvas, driverCtx, true); // Show driver on driver map
+                renderDriverRouteBins(); // Re-render driver map with current route bins
             });
 
             dashboardBtn.addEventListener('click', () => {
@@ -743,34 +972,12 @@
                 dashboardBtn.classList.remove('bg-gray-200', 'text-gray-700');
                 driverAppBtn.classList.add('bg-gray-200', 'text-gray-700');
                 driverAppBtn.classList.remove('bg-blue-600', 'text-white');
-                // Draw dashboard map when dashboard is shown
                 if (!dashboardCtx) {
                     dashboardCtx = dashboardMapCanvas.getContext('2d');
                 }
-                drawMap(dashboardMapCanvas, dashboardCtx, false); // DO NOT show driver on dashboard map
+                drawMap(dashboardMapCanvas, dashboardCtx, false); // DO NOT show driver on dashboard map, show all bins
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy một hoặc nhiều phần tử nút chuyển đổi hoặc các phần chính của ứng dụng.");
         }
-
-
-        // Driver App: Handle clicking on a bin item to show details
-        document.querySelectorAll('#driverScreen1 ul li').forEach(item => {
-            item.addEventListener('click', () => {
-                currentBinId = item.dataset.binId;
-                const binInfo = binsData[currentBinId];
-
-                if (binInfo) {
-                    binDetailId.textContent = currentBinId;
-                    binDetailAddress.textContent = binInfo.address;
-                    binDetailLevel.textContent = binInfo.level;
-                    binDetailLastCollected.textContent = binInfo.lastCollected;
-                    binDetailNotes.value = ''; // Clear notes when opening
-                    driverScreen1.classList.add('hidden');
-                    driverScreen2.classList.remove('hidden');
-                }
-            });
-        });
 
         // Driver App: Mark as Collected button
         if (markCollectedBtn) {
@@ -781,30 +988,16 @@
                     binsData[currentBinId].level = "20% Đã thu gom";
                     binsData[currentBinId].lastCollected = new Date().toLocaleString('vi-VN');
 
-                    // Update UI for the collected bin in the list
-                    const collectedBinElement = document.querySelector(`#driverScreen1 ul li[data-bin-id="${currentBinId}"]`);
-                    if (collectedBinElement) {
-                        collectedBinElement.dataset.binStatus = "collected";
-                        const statusSpan = collectedBinElement.querySelector('span');
-                        statusSpan.textContent = "Đã thu gom";
-                        statusSpan.classList.remove('bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
-                        statusSpan.classList.add('bg-green-100', 'text-green-800');
-                    }
-
                     showMessageBox('Thành công', `Thùng rác ${currentBinId} đã được đánh dấu là đã thu gom.`);
                     driverScreen2.classList.add('hidden');
                     driverScreen1.classList.remove('hidden');
-                    // Redraw both maps if status changes
-                    if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-                    drawMap(driverMapCanvas, driverCtx, true);
+                    checkAndAdvanceRoute(); // Check route completion and advance
+                    // Redraw dashboard map to reflect collected bin status (if it was 'full' or 'near-full')
                     if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
-                    drawMap(dashboardMapCanvas, dashboardCtx, false); // Redraw dashboard without driver
+                    drawMap(dashboardMapCanvas, dashboardCtx, false);
                 }
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút 'Đã thu gom'.");
         }
-
 
         // Driver App: Report Issue button
         if (reportIssueBtn) {
@@ -812,10 +1005,7 @@
                 driverScreen2.classList.add('hidden');
                 driverScreen3.classList.remove('hidden');
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút 'Báo cáo sự cố'.");
         }
-
 
         // Driver App: Back to list button from detail screen
         if (backToDriverListBtn) {
@@ -823,76 +1013,70 @@
                 driverScreen2.classList.add('hidden');
                 driverScreen1.classList.remove('hidden');
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút 'Quay lại danh sách' (từ chi tiết thùng rác).");
         }
-
 
         // Driver App: Submit Issue button
         if (submitIssueBtn) {
-            submitIssueBtn.addEventListener('click', () => {
+            submitIssueBtn.addEventListener('click', async () => {
                 const selectedIssue = document.querySelector('input[name="issueType"]:checked');
-                const otherNotes = document.getElementById('otherIssueNotes').value;
-                let issueDescription = '';
+                const otherNotes = document.getElementById('otherIssueNotes').value.trim();
+                let issueType = '';
+                let notes = '';
 
                 if (selectedIssue) {
-                    issueDescription = selectedIssue.value;
-                    if (issueDescription === 'other' && otherNotes) {
-                        issueDescription = `Lý do khác: ${otherNotes}`;
-                    } else if (issueDescription === 'broken') {
-                        issueDescription = 'Thùng rác bị hỏng';
-                    } else if (issueDescription === 'blocked') {
-                        issueDescription = 'Đường đi bị tắc';
-                    } else if (issueDescription === 'overflow') {
-                        issueDescription = 'Lượng rác quá lớn';
+                    issueType = selectedIssue.value;
+                    if (issueType === 'other') {
+                        notes = otherNotes;
+                        if (!notes) {
+                            showMessageBox('Lỗi', 'Vui lòng nhập ghi chú cho lý do khác.');
+                            return;
+                        }
                     }
                 } else if (otherNotes) {
-                    issueDescription = `Lý do khác: ${otherNotes}`;
+                    issueType = 'other';
+                    notes = otherNotes;
                 } else {
                     showMessageBox('Lỗi', 'Vui lòng chọn loại sự cố hoặc nhập ghi chú.');
                     return;
                 }
 
-                showMessageBox('Báo cáo đã gửi', `Đã gửi báo cáo sự cố cho thùng rác ${currentBinId}: ${issueDescription}`);
-                driverScreen3.classList.add('hidden');
-                driverScreen1.classList.remove('hidden');
+                if (currentBinId && userId) {
+                    await addIssue(currentBinId, issueType, notes, userId);
+                    driverScreen3.classList.add('hidden');
+                    driverScreen1.classList.remove('hidden');
+                    // Clear radio buttons and notes after submission
+                    document.querySelectorAll('input[name="issueType"]').forEach(radio => radio.checked = false);
+                    document.getElementById('otherIssueNotes').value = '';
+                } else {
+                    showMessageBox('Lỗi', 'Không thể gửi báo cáo. Vui lòng đảm bảo bạn đã chọn thùng rác và đã đăng nhập.');
+                }
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút 'Gửi báo cáo'.");
         }
-
 
         // Driver App: Cancel Issue button
         if (cancelIssueBtn) {
             cancelIssueBtn.addEventListener('click', () => {
                 driverScreen3.classList.add('hidden');
-                driverScreen2.classList.remove('hidden'); // Go back to bin detail
+                driverScreen2.classList.remove('hidden');
+                // Clear radio buttons and notes on cancel
+                document.querySelectorAll('input[name="issueType"]').forEach(radio => radio.checked = false);
+                document.getElementById('otherIssueNotes').value = '';
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút 'Hủy' (báo cáo sự cố).");
         }
-
 
         // Message Box Close Button
         if (messageBoxCloseBtn) {
             messageBoxCloseBtn.addEventListener('click', hideMessageBox);
-        } else {
-            console.error("Lỗi: Không tìm thấy nút đóng hộp thoại thông báo.");
         }
-
 
         // Dashboard: View Routes & Bins button
         if (viewRoutesBtn && dashboardScreen1 && dashboardScreen2 && routesTab) {
             viewRoutesBtn.addEventListener('click', () => {
                 dashboardScreen1.classList.add('hidden');
                 dashboardScreen2.classList.remove('hidden');
-                // Ensure Routes tab is active by default
                 routesTab.click();
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy một hoặc nhiều phần tử nút xem lộ trình hoặc các màn hình dashboard.");
         }
-
 
         // Dashboard: Back to Overview button
         if (backToDashboardOverviewBtn && dashboardScreen2 && dashboardScreen1) {
@@ -900,10 +1084,7 @@
                 dashboardScreen2.classList.add('hidden');
                 dashboardScreen1.classList.remove('hidden');
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy nút quay lại tổng quan hoặc các màn hình dashboard.");
         }
-
 
         // Dashboard: Tab switching for Routes and Bins
         if (routesTab && binsTab && routesContent && binsContent) {
@@ -924,10 +1105,7 @@
                 binsContent.classList.remove('hidden');
                 routesContent.classList.add('hidden');
             });
-        } else {
-            console.error("Lỗi: Không tìm thấy một hoặc nhiều phần tử tab hoặc nội dung tab.");
         }
-
 
         // Initial state: Show Driver App by default and draw its map
         document.addEventListener('DOMContentLoaded', () => {
@@ -939,29 +1117,28 @@
                 dashboardBtn.classList.add('bg-gray-200', 'text-gray-700');
                 dashboardBtn.classList.remove('bg-blue-600', 'text-white');
 
-                // Initialize and draw driver map on load
                 if (driverMapCanvas) {
                     driverCtx = driverMapCanvas.getContext('2d');
-                    drawMap(driverMapCanvas, driverCtx, true);
+                    // Initial draw for driver app will be handled by renderDriverRouteBins after auth
                 }
-            } else {
-                console.error("Lỗi: Không tìm thấy một hoặc nhiều phần tử cần thiết để thiết lập trạng thái ban đầu (driverAppSection, dashboardSection, driverAppBtn, dashboardBtn).");
             }
         });
 
         // Add event listener for window resize to redraw the map
         window.addEventListener('resize', () => {
-            // Only redraw if the dashboard is currently visible
             if (!dashboardSection.classList.contains('hidden')) {
                 if (!dashboardCtx) { dashboardCtx = dashboardMapCanvas.getContext('2d'); }
                 drawMap(dashboardMapCanvas, dashboardCtx, false); // Redraw dashboard without driver
             } else if (!driverAppSection.classList.contains('hidden')) {
                 if (!driverCtx) { driverCtx = driverMapCanvas.getContext('2d'); }
-                drawMap(driverMapCanvas, driverCtx, true); // Redraw driver map with driver
+                // Redraw driver map with current route bins
+                const currentRouteBins = routesData[currentRouteIndex] || [];
+                drawMap(driverMapCanvas, driverCtx, true, currentRouteBins);
             }
         });
 
     </script>
 </body>
 </html>
+
 
