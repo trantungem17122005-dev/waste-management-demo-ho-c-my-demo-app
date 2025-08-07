@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Phần mềm Quản lý Rác Thông minh</title>
+    <!-- Tailwind CSS CDN để tạo giao diện đẹp và responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Màu nền tối */
+            color: #e2e8f0; /* Màu chữ sáng */
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        /* Tùy chỉnh màu sắc cho các trạng thái thùng rác */
+        .bin-marker-full {
+            background-color: #ef4444; /* Màu đỏ cho thùng đầy */
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .bin-marker-normal {
+            background-color: #3b82f6; /* Màu xanh cho thùng bình thường */
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .truck-marker {
+            background-color: #10b981; /* Màu xanh lá cho xe */
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #fff;
+        }
+    </style>
+    <!-- Leaflet CSS và JS cho bản đồ -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha2d3-QJz1SjR-W6i3Vd9H3j9r6a3C6D3B6S8C3F6F3B6S8C3" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha2d3-WB3A2P6k7J3L4J3Z3B6S8C3F6F3B6S8C3" crossorigin=""></script>
+</head>
+<body class="p-6">
+    <div class="container mx-auto p-4 bg-gray-800 rounded-lg shadow-xl">
+        <h1 class="text-3xl font-bold text-center text-teal-400 mb-6">Phần mềm Quản lý Thu gom Rác Thông minh</h1>
+        
+        <!-- Dashboard Thống kê -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div class="bg-gray-900 p-4 rounded-lg shadow-md flex flex-col justify-center items-center">
+                <p class="text-gray-400 text-sm">Tổng số thùng rác</p>
+                <p id="totalBins" class="text-2xl font-bold text-blue-400">0</p>
+            </div>
+            <div class="bg-gray-900 p-4 rounded-lg shadow-md flex flex-col justify-center items-center">
+                <p class="text-gray-400 text-sm">Số thùng đầy</p>
+                <p id="fullBins" class="text-2xl font-bold text-red-400">0</p>
+            </div>
+            <div class="bg-gray-900 p-4 rounded-lg shadow-md flex flex-col justify-center items-center">
+                <p class="text-gray-400 text-sm">Tình trạng xe</p>
+                <p id="truckStatus" class="text-2xl font-bold text-green-400">Đang chờ</p>
+            </div>
+            <div class="bg-gray-900 p-4 rounded-lg shadow-md flex flex-col justify-center items-center">
+                <p class="text-gray-400 text-sm">Lộ trình</p>
+                <p id="routeStatus" class="text-2xl font-bold text-yellow-400">Chưa có</p>
+            </div>
+        </div>
+
+        <!-- Khu vực Bản đồ và Điều khiển -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Bản đồ -->
+            <div class="md:col-span-2">
+                <div id="map"></div>
+            </div>
+
+            <!-- Bảng điều khiển và Log -->
+            <div class="md:col-span-1 flex flex-col bg-gray-900 p-4 rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-4">Điều khiển & Giám sát</h3>
+                <div class="space-y-4 mb-4">
+                    <button id="startBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-105">
+                        Bắt đầu mô phỏng
+                    </button>
+                    <button id="optimizeBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-105" disabled>
+                        Tối ưu hóa lộ trình
+                    </button>
+                </div>
+                
+                <h4 class="text-lg font-semibold mb-2">Nhật ký hệ thống:</h4>
+                <div id="log" class="bg-gray-800 p-3 rounded-lg overflow-y-auto flex-grow h-48 border border-gray-700 text-gray-300 text-sm">
+                    <!-- Các dòng log sẽ xuất hiện ở đây -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Hằng số và cấu hình
+        const FULLNESS_THRESHOLD = 80; // Ngưỡng đầy 80%
+        const SIMULATION_INTERVAL = 3000; // Cập nhật dữ liệu mỗi 3 giây
+
+        // Dữ liệu mô phỏng
+        let bins = [
+            { id: 1, lat: 21.028511, lng: 105.854134, fullness: 50, marker: null }, // Vị trí giả định ở Hà Nội
+            { id: 2, lat: 21.031201, lng: 105.850422, fullness: 65, marker: null },
+            { id: 3, lat: 21.034512, lng: 105.859678, fullness: 75, marker: null },
+            { id: 4, lat: 21.025000, lng: 105.860100, fullness: 40, marker: null },
+            { id: 5, lat: 21.022100, lng: 105.855000, fullness: 30, marker: null },
+            { id: 6, lat: 21.029800, lng: 105.851000, fullness: 90, marker: null }, // Thùng đầy
+            { id: 7, lat: 21.033000, lng: 105.857000, fullness: 85, marker: null }, // Thùng đầy
+            { id: 8, lat: 21.027000, lng: 105.862000, fullness: 70, marker: null },
+            { id: 9, lat: 21.030500, lng: 105.856500, fullness: 60, marker: null },
+            { id: 10, lat: 21.026000, lng: 105.853000, fullness: 78, marker: null },
+        ];
+        
+        let truck = { id: 'T-001', lat: 21.032, lng: 105.855, marker: null };
+        let route = [];
+        let simulationInterval = null;
+        let isSimulating = false;
+        let map;
+        let routePolyline = null;
+        let truckIcon;
+
+        // Lấy các phần tử DOM
+        const totalBinsEl = document.getElementById('totalBins');
+        const fullBinsEl = document.getElementById('fullBins');
+        const truckStatusEl = document.getElementById('truckStatus');
+        const routeStatusEl = document.getElementById('routeStatus');
+        const logEl = document.getElementById('log');
+        const startBtn = document.getElementById('startBtn');
+        const optimizeBtn = document.getElementById('optimizeBtn');
+
+        /**
+         * @desc Ghi lại thông điệp vào log box
+         * @param {string} message - Nội dung thông điệp
+         */
+        const logMessage = (message) => {
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `<p class="text-xs text-gray-400">[${time}] ${message}</p>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        /**
+         * @desc Khởi tạo bản đồ Leaflet
+         */
+        const initMap = () => {
+            logMessage("Đang khởi tạo bản đồ...");
+            map = L.map('map').setView([truck.lat, truck.lng], 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            // Tạo icon cho xe
+            truckIcon = L.divIcon({
+                className: 'truck-marker',
+                html: '🚚',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+            });
+
+            // Cập nhật bản đồ lần đầu
+            updateMap();
+        };
+
+        /**
+         * @desc Cập nhật vị trí của các thùng rác và xe trên bản đồ
+         */
+        const updateMap = () => {
+            // Xóa các marker cũ
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Thêm các marker thùng rác mới
+            bins.forEach(bin => {
+                const markerClass = bin.fullness >= FULLNESS_THRESHOLD ? 'bin-marker-full' : 'bin-marker-normal';
+                const customIcon = L.divIcon({
+                    className: markerClass,
+                    html: `<div class="tooltip-text" style="display:none;">Bin ${bin.id}: ${bin.fullness}% đầy</div>`,
+                    iconSize: [24, 24]
+                });
+                bin.marker = L.marker([bin.lat, bin.lng], { icon: customIcon }).addTo(map);
+                bin.marker.bindPopup(`<b>Thùng rác ID: ${bin.id}</b><br>Mức đầy: ${bin.fullness}%`).openPopup();
+            });
+
+            // Thêm marker xe thu gom
+            if (truck.marker) {
+                map.removeLayer(truck.marker);
+            }
+            truck.marker = L.marker([truck.lat, truck.lng], { icon: truckIcon }).addTo(map);
+            truck.marker.bindPopup(`<b>Xe thu gom ID: ${truck.id}</b><br>Trạng thái: ${truckStatusEl.innerText}`).openPopup();
+
+            // Cập nhật polyline lộ trình
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+            }
+            if (route.length > 0) {
+                routePolyline = L.polyline(route.map(r => [r.lat, r.lng]), { color: '#3b82f6', weight: 4 }).addTo(map);
+            }
+
+            // Cập nhật dashboard
+            const fullBinsCount = bins.filter(b => b.fullness >= FULLNESS_THRESHOLD).length;
+            totalBinsEl.innerText = bins.length;
+            fullBinsEl.innerText = fullBinsCount;
+        };
+
+        /**
+         * @desc Mô phỏng việc thu thập dữ liệu cảm biến
+         */
+        const updateSensorData = () => {
+            if (!isSimulating) return;
+
+            logMessage("Đang cập nhật dữ liệu cảm biến...");
+            bins.forEach(bin => {
+                // Tăng mức đầy ngẫu nhiên, mô phỏng quá trình sử dụng
+                bin.fullness += Math.floor(Math.random() * 10);
+                if (bin.fullness > 100) bin.fullness = 100;
+            });
+            updateMap();
+            logMessage("Đã cập nhật dữ liệu cảm biến.");
+        };
+
+        /**
+         * @desc Tìm các thùng rác đã đầy
+         * @returns {Array} - Mảng các thùng rác đã đầy
+         */
+        const findFullBins = () => {
+            const fullBins = bins.filter(bin => bin.fullness >= FULLNESS_THRESHOLD);
+            if (fullBins.length > 0) {
+                logMessage(`Tìm thấy ${fullBins.length} thùng rác đã đầy.`);
+            }
+            return fullBins;
+        };
+
+        /**
+         * @desc Tính toán lộ trình tối ưu (mô phỏng)
+         * @param {Array} binsToCollect - Mảng các thùng rác cần thu gom
+         */
+        const calculateOptimalRoute = (binsToCollect) => {
+            if (binsToCollect.length === 0) {
+                logMessage("Không có thùng rác nào đầy, không cần tạo lộ trình.");
+                route = [];
+                updateMap();
+                routeStatusEl.innerText = "Đã hoàn thành";
+                return;
+            }
+
+            logMessage("Đang tính toán lộ trình tối ưu...");
+            // Thuật toán đơn giản: sắp xếp các thùng rác theo khoảng cách từ xe
+            // Note: Trong thực tế, đây sẽ là một thuật toán phức tạp hơn như TSP
+            binsToCollect.sort((a, b) => {
+                const distA = Math.sqrt(Math.pow(a.lat - truck.lat, 2) + Math.pow(a.lng - truck.lng, 2));
+                const distB = Math.sqrt(Math.pow(b.lat - truck.lat, 2) + Math.pow(b.lng - truck.lng, 2));
+                return distA - distB;
+            });
+
+            // Xây dựng lộ trình
+            route = [truck, ...binsToCollect];
+            logMessage(`Lộ trình đã được tạo với ${binsToCollect.length} điểm dừng.`);
+            routeStatusEl.innerText = "Đã có lộ trình";
+            truckStatusEl.innerText = "Đang di chuyển";
+            
+            // Mô phỏng việc xe di chuyển theo lộ trình
+            simulateTruckMovement();
+        };
+
+        /**
+         * @desc Mô phỏng việc xe di chuyển theo lộ trình đã tính toán
+         */
+        const simulateTruckMovement = () => {
+            if (route.length === 0) {
+                truckStatusEl.innerText = "Đã hoàn thành";
+                return;
+            }
+
+            let currentBinIndex = 0;
+            const moveTruck = setInterval(() => {
+                const nextDestination = route[currentBinIndex];
+                if (nextDestination) {
+                    truck.lat = nextDestination.lat;
+                    truck.lng = nextDestination.lng;
+                    updateMap();
+                    logMessage(`Xe đang di chuyển đến thùng rác ID: ${nextDestination.id || 'điểm bắt đầu'}`);
+
+                    // Khi xe đến điểm dừng
+                    if (Math.abs(truck.lat - nextDestination.lat) < 0.0001 && Math.abs(truck.lng - nextDestination.lng) < 0.0001) {
+                        if (nextDestination.id) { // Kiểm tra đây là thùng rác
+                            // Mô phỏng việc thu gom và reset mức đầy
+                            const collectedBin = bins.find(b => b.id === nextDestination.id);
+                            if (collectedBin) {
+                                collectedBin.fullness = 0;
+                                logMessage(`Đã thu gom rác tại thùng ID: ${collectedBin.id}. Mức đầy được reset.`);
+                            }
+                        }
+                        currentBinIndex++;
+                        if (currentBinIndex >= route.length) {
+                            clearInterval(moveTruck);
+                            logMessage("Xe đã hoàn thành lộ trình.");
+                            truckStatusEl.innerText = "Đã hoàn thành";
+                            route = [];
+                            updateMap();
+                        }
+                    }
+                }
+            }, 1500);
+        };
+
+        // Xử lý sự kiện nút
+        startBtn.addEventListener('click', () => {
+            if (!isSimulating) {
+                isSimulating = true;
+                simulationInterval = setInterval(updateSensorData, SIMULATION_INTERVAL);
+                startBtn.innerText = "Dừng mô phỏng";
+                startBtn.classList.remove('bg-blue-600');
+                startBtn.classList.add('bg-red-600');
+                optimizeBtn.disabled = false;
+                logMessage("Bắt đầu mô phỏng thu thập dữ liệu.");
+                truckStatusEl.innerText = "Đang chờ";
+            } else {
+                isSimulating = false;
+                clearInterval(simulationInterval);
+                startBtn.innerText = "Bắt đầu mô phỏng";
+                startBtn.classList.remove('bg-red-600');
+                startBtn.classList.add('bg-blue-600');
+                optimizeBtn.disabled = true;
+                logMessage("Dừng mô phỏng.");
+            }
+        });
+
+        optimizeBtn.addEventListener('click', () => {
+            logMessage("Người quản lý yêu cầu tối ưu hóa lộ trình.");
+            const fullBins = findFullBins();
+            calculateOptimalRoute(fullBins);
+        });
+
+        // Khởi động ứng dụng khi trang được tải
+        window.onload = function() {
+            logMessage("Chào mừng bạn đến với demo. Hãy nhấn 'Bắt đầu mô phỏng' để khởi động hệ thống.");
+            initMap();
+        };
+    </script>
+</body>
+</html>
